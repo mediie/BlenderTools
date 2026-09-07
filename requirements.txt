@@ -1,6 +1,6 @@
 docker==7.1.0
 unittest-xml-reporting==3.2.0
-fake-bpy-module-latest==20231010
+fake-bpy-module-5.1==20260730
 PyGithub==2.1.1
 debugpy==1.8.1
 numpy==1.26.4
