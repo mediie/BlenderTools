@@ -204,6 +204,45 @@ def get_mesh_unreal_type(mesh_object):
     return UnrealTypes.STATIC_MESH
 
 
+def get_action_fcurves(action):
+    """
+    Gets the fcurves of an action on any Blender version. Blender 5 removed Action.fcurves in favour of the
+    slotted layout (layers, strips, channelbags), so this reads whichever the running version has.
+
+    :param bpy.types.Action action: The action.
+    :return list: The fcurves of the action.
+    """
+    fcurves = getattr(action, 'fcurves', None)
+    if fcurves is not None:
+        return list(fcurves)
+    return [
+        fcurve
+        for layer in action.layers
+        for strip in layer.strips
+        for channelbag in strip.channelbags
+        for fcurve in channelbag.fcurves
+    ]
+
+
+def remove_action_fcurve(action, fcurve):
+    """
+    Removes an fcurve from an action on any Blender version.
+
+    :param bpy.types.Action action: The action.
+    :param bpy.types.FCurve fcurve: The fcurve to remove.
+    """
+    fcurves = getattr(action, 'fcurves', None)
+    if fcurves is not None:
+        fcurves.remove(fcurve)
+        return
+    for layer in action.layers:
+        for strip in layer.strips:
+            for channelbag in strip.channelbags:
+                if any(candidate == fcurve for candidate in channelbag.fcurves):
+                    channelbag.fcurves.remove(fcurve)
+                    return
+
+
 def get_custom_property_fcurve_data(action_name):
     """
     Gets the names and key frame points of object custom property values from the fcurves.
@@ -215,7 +254,7 @@ def get_custom_property_fcurve_data(action_name):
     action = bpy.data.actions.get(action_name)
     frame_rate = bpy.context.scene.render.fps
     if action:
-        for fcurve in action.fcurves:
+        for fcurve in get_action_fcurves(action):
             if fcurve.data_path.startswith('["') and fcurve.data_path.endswith('"]'):
                 name = fcurve.data_path.strip('["').strip('"]')
                 data[name] = [[(point.co[0] - 1) / frame_rate, point.co[1]] for point in fcurve.keyframe_points]
@@ -904,9 +943,9 @@ def remove_object_scale_keyframes(actions):
     :param list actions: A list of action objects.
     """
     for action in actions:
-        for fcurve in action.fcurves:
+        for fcurve in get_action_fcurves(action):
             if fcurve.data_path == 'scale':
-                action.fcurves.remove(fcurve)
+                remove_action_fcurve(action, fcurve)
 
 
 def remove_from_disk(path, directory=False):
@@ -1458,7 +1497,7 @@ def round_keyframes(actions):
     :param list actions: A list of action objects.
     """
     for action in actions:
-        for fcurve in action.fcurves:
+        for fcurve in get_action_fcurves(action):
             for keyframe_point in fcurve.keyframe_points:
                 keyframe_point.co[0] = round(keyframe_point.co[0])
 
@@ -1568,7 +1607,7 @@ def scale_object_actions(unordered_objects, actions, scale_factor):
             # iterate over any imported actions first this time...
             for action in actions:
                 # iterate through the location curves
-                for fcurve in [fcurve for fcurve in action.fcurves if fcurve.data_path.endswith('location')]:
+                for fcurve in [fcurve for fcurve in get_action_fcurves(action) if fcurve.data_path.endswith('location')]:
                     # the location fcurve of the object
                     if fcurve.data_path == 'location':
                         for keyframe_point in fcurve.keyframe_points:
